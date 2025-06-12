@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    /* ---------- layout & theme ---------------------------------------- */
+    body{font-family:'Segoe UI',Arial,sans-serif;background:#FFF9E1;color:#222;
+         max-width:600px;margin:0 auto;padding:24px 8px 32px}
+    h2{margin-top:0}
+    @media(max-width:600px){body{padding:8px}h2{font-size:1.2rem}}
+
+    .card{background:#FFF;border-radius:10px;padding:16px;margin-bottom:18px;
+          box-shadow:0 0 8px rgba(0,0,0,.07)}
+
+    input,select,textarea{width:100%;padding:12px;font-size:16px;margin-bottom:16px;
+                          border-radius:6px;border:1px solid #ccc;background:#FFF}
+    button,.toggle-btn{min-width:120px;padding:10px 20px;font-size:16px;border:none;
+                       border-radius:8px;background:#444;color:#fff;cursor:pointer;
+                       box-shadow:0 2px 8px rgba(68,68,68,.15);transition:background .2s}
+    button:hover,.toggle-btn:hover{background:#222}
+
+    .search-row{display:flex;gap:10px;align-items:center;margin-bottom:18px;position:relative}
+    @media(max-width:500px){.search-row{flex-direction:column;gap:4px}
+                            button,.toggle-btn{min-width:90px;font-size:14px}}
+
+    .autocomplete-list{position:absolute;left:0;width:100%;max-height:180px;overflow-y:auto;
+                       background:#fff;border:1px solid #ddd;border-radius:8px;z-index:999;
+                       box-shadow:0 4px 16px rgba(0,0,0,.07);margin-top:44px}
+    .autocomplete-item{padding:8px 12px;cursor:pointer}
+    .autocomplete-item.selected,.autocomplete-item:hover{background:#FFD600;font-weight:bold}
+  </style>
+</head>
+<body>
+  <h2>Heartland MS Level&nbsp;1</h2>
+
+  <!-- search bar ------------------------------------------------------- -->
+  <div class="search-row">
+    <input id="studentSearch" placeholder="Type a student's name…" autocomplete="off">
+    <div id="autocomplete-list" class="autocomplete-list hidden"></div>
+    <button id="searchStudentBtn">Search</button>
+  </div>
+
+  <!-- student profile -------------------------------------------------- -->
+  <div id="student-info" class="card">Select a student to view profile.</div>
+
+  <!-- referral history (always visible) -------------------------------- -->
+  <div id="referral-history" class="card">
+    <h4>Referral History</h4>
+    <p>Select a student to load history.</p>
+  </div>
+
+  <!-- log-referral button & form --------------------------------------- -->
+  <button id="show-form-btn" class="toggle-btn hidden">Log a Referral</button>
+  <form id="referral-form" class="hidden">
+    <h3>Log a Referral</h3>
+    <input   id="teacherName"     placeholder="Your Name" required>
+    <select  id="infractionSelect" required><option value="">-- choose infraction --</option></select>
+    <input   type="date" id="refDate" required>
+    <input   type="time" id="refTime" required>
+    <textarea id="description" placeholder="What happened?" required></textarea>
+    <button type="button" id="submitReferral">Submit Referral</button>
+  </form>
+
+<script>
+  /* ---------------- state --------------------------------------------- */
+  let allNames = [];
+  let currentFirst = null, currentLast = null, currentID = null;
+  let selectedIdx = -1;                       // for keyboard navigation
+
+  /* ---------------- render student + auto-history --------------------- */
+  function renderStudent(d){
+    if(d.error){alert(d.error);return;}
+
+    currentFirst = d[Object.keys(d).find(k=>k.toLowerCase().startsWith('first'))];
+    currentLast  = d[Object.keys(d).find(k=>k.toLowerCase().startsWith('last'))];
+    currentID    = d.ID ?? d.Id ?? d.id ?? '—';
+
+    document.getElementById("student-info").innerHTML = `
+      <div style="display:flex;gap:2em;margin-bottom:8px">
+        <span style="font-size:1.25em;font-weight:bold">${currentFirst} ${currentLast}</span>
+        <span style="color:#D32F2F;font-weight:bold">Referral Count: ${d["Referral Count"]}</span>
+        <span style="font-weight:bold">Demerits: ${d.Demerits}</span>
+      </div>
+      <strong>ID:</strong> ${currentID}<br>
+      Grade: ${d.Grade}<br>
+      Age: ${d.Age}<br>
+      Gender: ${d.Gender}<br>
+      Email: ${d.Email}<br>
+      Guardian: ${d["Primary Guardian"]}<br>
+      Phone: ${d.Phone}`;
+
+    document.getElementById("show-form-btn").classList.remove("hidden");
+    document.getElementById("referral-form").classList.add("hidden");
+
+    /* auto-load history by ID */
+    google.script.run.withSuccessHandler(renderHistory)
+                     .getStudentReferralsByID(currentID);
+  }
+
+  /* ---------------- render history list ------------------------------- */
+ function renderHistory(arr){
+  const box = document.getElementById('referral-history');
+
+  if(!arr.length){
+    box.innerHTML = '<h4>Referral History</h4><p>No referrals on record.</p>';
+  }else{
+    box.innerHTML = `<h4>Referral History (${arr.length})</h4>
+      <ul style="padding-left:18px">${arr.map(r => `
+        <li style="margin-bottom:8px">
+          <strong>${r.Date || ''} ${r.Time || ''}</strong> – ${r.Infraction}
+          <br><em>${r['Teacher Name']}</em><br>${r.Description}
+        </li>`).join('')}</ul>`;
+  }
+
+  /* debug line – shows in browser console so you know rows arrived */
+  console.log('History loaded:', arr.length, 'rows');
+}
+
+
+  /* ---------------- autocomplete -------------------------------------- */
+  const searchEl = document.getElementById("studentSearch");
+  searchEl.addEventListener("input",()=>{
+    const q = searchEl.value.toLowerCase().trim();
+    const list = document.getElementById("autocomplete-list");
+    list.innerHTML = ""; selectedIdx = -1;
+    if(!q){list.classList.add("hidden");return;}
+
+    const matches = allNames.filter(n=>n.fullName.toLowerCase().includes(q));
+    if(!matches.length){list.classList.add("hidden");return;}
+
+    matches.forEach(obj=>{
+      const div=document.createElement("div");
+      div.className="autocomplete-item";
+      div.textContent=obj.fullName;
+      div.addEventListener("mousedown",()=>selectStudent(obj));
+      list.appendChild(div);
+    });
+    list.classList.remove("hidden");
+  });
+
+  function selectStudent(obj){
+    google.script.run.withSuccessHandler(renderStudent)
+                     .getStudentProfile(obj.firstName, obj.lastName);
+    searchEl.value = obj.fullName;
+    document.getElementById("autocomplete-list").classList.add("hidden");
+  }
+
+  searchEl.addEventListener("keydown",e=>{
+    const items = document.querySelectorAll(".autocomplete-item");
+    if(!items.length) return;
+    if(e.key==="ArrowDown"){e.preventDefault();selectedIdx=(selectedIdx+1)%items.length;hl(items);}
+    else if(e.key==="ArrowUp"){e.preventDefault();selectedIdx=(selectedIdx-1+items.length)%items.length;hl(items);}
+    else if(e.key==="Enter" && selectedIdx>=0){e.preventDefault();items[selectedIdx].dispatchEvent(new MouseEvent("mousedown"));}
+  });
+  function hl(items){items.forEach((it,i)=>it.classList.toggle("selected",i===selectedIdx));}
+
+  document.body.addEventListener("click",e=>{
+    if(!e.target.closest("#studentSearch") && !e.target.closest("#autocomplete-list")){
+      document.getElementById("autocomplete-list").classList.add("hidden");
+    }
+  });
+
+  document.getElementById("searchStudentBtn").addEventListener("click",()=>{
+    const q = searchEl.value.toLowerCase().trim();
+    const m = allNames.find(n=>n.fullName.toLowerCase()===q);
+    if(m) selectStudent(m); else alert("Student not found. Check spelling.");
+  });
+
+  /* ---------------- form: show/hide + submit --------------------------- */
+  document.getElementById("show-form-btn").addEventListener("click",()=>{
+    document.getElementById("referral-form").classList.toggle("hidden");
+  });
+
+  document.getElementById("submitReferral").addEventListener("click",()=>{
+    const d = {
+      firstName  : currentFirst,
+      lastName   : currentLast,
+      id         : currentID,
+      teacherName: document.getElementById("teacherName").value,
+      infraction : document.getElementById("infractionSelect").value,
+      date       : document.getElementById("refDate").value,
+      time       : document.getElementById("refTime").value,
+      description: document.getElementById("description").value
+    };
+    google.script.run.withSuccessHandler(r=>{
+      if(r.success){
+        alert("Referral logged!");
+        document.getElementById("referral-form").classList.add("hidden");
+        google.script.run.withSuccessHandler(renderHistory)
+                         .getStudentReferralsByID(currentID);   // refresh list
+      }
+    }).logReferral(d);
+  });
+
+  /* ---------------- load infractions & name list ----------------------- */
+  google.script.run.withSuccessHandler(arr=>allNames=arr).getAllStudentNames();
+  google.script.run.withSuccessHandler(arr=>{
+    const sel=document.getElementById("infractionSelect");
+    arr.forEach(t=>sel.add(new Option(t,t)));
+  }).getInfractionTypes();
+</script>
+</body>
+</html>
