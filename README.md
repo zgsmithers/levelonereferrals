@@ -6,6 +6,7 @@ The repository contains only a few files. The key components are:
 
 Frontend (index.html) – A single HTML page with embedded CSS and JavaScript that runs in Google Apps Script’s HTML service. It displays a search box for students, a profile card, referral history, and a “Log a Referral” form. The page uses the google.script.run interface to call server-side Apps Script functions. Example lines showing the main UI elements:
 
+
 41  <div class="search-row">
 42    <input id="studentSearch" placeholder="Type a student's name…" autocomplete="off">
 43    <div id="autocomplete-list" class="autocomplete-list hidden"></div>
