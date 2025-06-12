@@ -4,7 +4,9 @@
   <base target="_top">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    /* ---------- layout & theme ---------------------------------------- */
+    /* === Paint job & vibe settings =====================================
+       Cheap notebook yellow + little drop‑shadows so it feels "designed".
+       Tweak at will, but don't @ me when Comic Sans shows up.            */
     body{font-family:'Segoe UI',Arial,sans-serif;background:#FFF9E1;color:#222;
          max-width:600px;margin:0 auto;padding:24px 8px 32px}
     h2{margin-top:0}
@@ -13,6 +15,7 @@
     .card{background:#FFF;border-radius:10px;padding:16px;margin-bottom:18px;
           box-shadow:0 0 8px rgba(0,0,0,.07)}
 
+    /* Inputs: look like they belong in 2025, behave like 1998 */
     input,select,textarea{width:100%;padding:12px;font-size:16px;margin-bottom:16px;
                           border-radius:6px;border:1px solid #ccc;background:#FFF}
     button,.toggle-btn{min-width:120px;padding:10px 20px;font-size:16px;border:none;
@@ -34,23 +37,23 @@
 <body>
   <h2>Heartland MS Level&nbsp;1</h2>
 
-  <!-- search bar ------------------------------------------------------- -->
+  <!-- 🔍 search-bot 3000: type a kid's name, pray for spelling --------- -->
   <div class="search-row">
     <input id="studentSearch" placeholder="Type a student's name…" autocomplete="off">
     <div id="autocomplete-list" class="autocomplete-list hidden"></div>
     <button id="searchStudentBtn">Search</button>
   </div>
 
-  <!-- student profile -------------------------------------------------- -->
+  <!-- 📇 student dossier (aka profile card) ---------------------------- -->
   <div id="student-info" class="card">Select a student to view profile.</div>
 
-  <!-- referral history (always visible) -------------------------------- -->
+  <!-- 📜 rap sheet – always on display so teachers behave -------------- -->
   <div id="referral-history" class="card">
     <h4>Referral History</h4>
     <p>Select a student to load history.</p>
   </div>
 
-  <!-- log-referral button & form --------------------------------------- -->
+  <!-- 📝 button + form to tattle on kids -------------------------------- -->
   <button id="show-form-btn" class="toggle-btn hidden">Log a Referral</button>
   <form id="referral-form" class="hidden">
     <h3>Log a Referral</h3>
@@ -63,12 +66,12 @@
   </form>
 
 <script>
-  /* ---------------- state --------------------------------------------- */
+  /* ==== Global state (the junk drawer) ================================ */
   let allNames = [];
   let currentFirst = null, currentLast = null, currentID = null;
-  let selectedIdx = -1;                       // for keyboard navigation
+  let selectedIdx = -1;                       // for arrow‑key voodoo
 
-  /* ---------------- render student + auto-history --------------------- */
+  /* ==== Render student card + lazy‑load history ======================= */
   function renderStudent(d){
     if(d.error){alert(d.error);return;}
 
@@ -93,12 +96,12 @@
     document.getElementById("show-form-btn").classList.remove("hidden");
     document.getElementById("referral-form").classList.add("hidden");
 
-    /* auto-load history by ID */
+    // auto‑pull the kid's rap sheet so we don't forget
     google.script.run.withSuccessHandler(renderHistory)
                      .getStudentReferralsByID(currentID);
   }
 
-  /* ---------------- render history list ------------------------------- */
+  /* ==== Render the referral list (fancy name for <ul>) ================ */
  function renderHistory(arr){
   const box = document.getElementById('referral-history');
 
@@ -113,12 +116,12 @@
         </li>`).join('')}</ul>`;
   }
 
-  /* debug line – shows in browser console so you know rows arrived */
+  // Debug flex: shout in console so devs feel smart
   console.log('History loaded:', arr.length, 'rows');
 }
 
 
-  /* ---------------- autocomplete -------------------------------------- */
+  /* ==== Autocomplete magic – now 37% less buggy ======================= */
   const searchEl = document.getElementById("studentSearch");
   searchEl.addEventListener("input",()=>{
     const q = searchEl.value.toLowerCase().trim();
@@ -146,28 +149,31 @@
     document.getElementById("autocomplete-list").classList.add("hidden");
   }
 
+  // Arrow‑key gymnastics so mouse‑haters can live happy
   searchEl.addEventListener("keydown",e=>{
     const items = document.querySelectorAll(".autocomplete-item");
     if(!items.length) return;
-    if(e.key==="ArrowDown"){e.preventDefault();selectedIdx=(selectedIdx+1)%items.length;hl(items);}
-    else if(e.key==="ArrowUp"){e.preventDefault();selectedIdx=(selectedIdx-1+items.length)%items.length;hl(items);}
+    if(e.key==="ArrowDown"){e.preventDefault();selectedIdx=(selectedIdx+1)%items.length;hl(items);} 
+    else if(e.key==="ArrowUp"){e.preventDefault();selectedIdx=(selectedIdx-1+items.length)%items.length;hl(items);} 
     else if(e.key==="Enter" && selectedIdx>=0){e.preventDefault();items[selectedIdx].dispatchEvent(new MouseEvent("mousedown"));}
   });
   function hl(items){items.forEach((it,i)=>it.classList.toggle("selected",i===selectedIdx));}
 
+  // Click outside = go away dropdown, like every decent UI ever
   document.body.addEventListener("click",e=>{
     if(!e.target.closest("#studentSearch") && !e.target.closest("#autocomplete-list")){
       document.getElementById("autocomplete-list").classList.add("hidden");
     }
   });
 
+  // Backup search button for the double‑clickers in the room
   document.getElementById("searchStudentBtn").addEventListener("click",()=>{
     const q = searchEl.value.toLowerCase().trim();
     const m = allNames.find(n=>n.fullName.toLowerCase()===q);
     if(m) selectStudent(m); else alert("Student not found. Check spelling.");
   });
 
-  /* ---------------- form: show/hide + submit --------------------------- */
+  /* ==== Referral form: peek‑a‑boo + send to backend =================== */
   document.getElementById("show-form-btn").addEventListener("click",()=>{
     document.getElementById("referral-form").classList.toggle("hidden");
   });
@@ -193,7 +199,7 @@
     }).logReferral(d);
   });
 
-  /* ---------------- load infractions & name list ----------------------- */
+  /* ==== One‑time bootstrapping: load infractions & names ============== */
   google.script.run.withSuccessHandler(arr=>allNames=arr).getAllStudentNames();
   google.script.run.withSuccessHandler(arr=>{
     const sel=document.getElementById("infractionSelect");
